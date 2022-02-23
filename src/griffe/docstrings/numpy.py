@@ -203,6 +203,8 @@ _RE_PARAMETER: Pattern = re.compile(
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+_RE_DOCTEST_BLANKLINE: Pattern = re.compile(r"^\s*<BLANKLINE>\s*$")
+_RE_DOCTEST_FLAGS: Pattern = re.compile(r"(\s*#\s*doctest:.+)$")
 
 
 def _read_parameters(docstring: Docstring, offset: int) -> tuple[list[DocstringParameter], int]:  # noqa: WPS231
@@ -252,7 +254,11 @@ def _read_parameters(docstring: Docstring, offset: int) -> tuple[list[DocstringP
     return parameters, index
 
 
-def _read_parameters_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionParameters | None, int]:
+def _read_parameters_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionParameters | None, int]:
     parameters, index = _read_parameters(docstring, offset)
 
     if parameters:
@@ -263,7 +269,9 @@ def _read_parameters_section(docstring: Docstring, offset: int) -> tuple[Docstri
 
 
 def _read_other_parameters_section(
-    docstring: Docstring, offset: int
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
 ) -> tuple[DocstringSectionOtherParameters | None, int]:
     parameters, index = _read_parameters(docstring, offset)
 
@@ -274,7 +282,11 @@ def _read_other_parameters_section(
     return None, index
 
 
-def _read_deprecated_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionDeprecated | None, int]:
+def _read_deprecated_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionDeprecated | None, int]:
     # deprecated
     # SINCE_VERSION
     #     TEXT?
@@ -293,7 +305,11 @@ def _read_deprecated_section(docstring: Docstring, offset: int) -> tuple[Docstri
     return DocstringSectionDeprecated(version=version, text=text), index
 
 
-def _read_returns_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionReturns | None, int]:
+def _read_returns_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionReturns | None, int]:
     # returns
     # (NAME : )?TYPE
     #     TEXT?
@@ -316,7 +332,11 @@ def _read_returns_section(docstring: Docstring, offset: int) -> tuple[DocstringS
     return DocstringSectionReturns(returns), index
 
 
-def _read_yields_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionYields | None, int]:
+def _read_yields_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionYields | None, int]:
     # yields
     # (NAME : )?TYPE
     #     TEXT?
@@ -339,7 +359,11 @@ def _read_yields_section(docstring: Docstring, offset: int) -> tuple[DocstringSe
     return DocstringSectionYields(yields), index
 
 
-def _read_receives_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionReceives | None, int]:
+def _read_receives_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionReceives | None, int]:
     # receives
     # (NAME : )?TYPE
     #     TEXT?
@@ -362,7 +386,11 @@ def _read_receives_section(docstring: Docstring, offset: int) -> tuple[Docstring
     return DocstringSectionReceives(receives), index
 
 
-def _read_raises_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionRaises | None, int]:
+def _read_raises_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionRaises | None, int]:
     # raises
     # EXCEPTION
     #     TEXT?
@@ -380,7 +408,11 @@ def _read_raises_section(docstring: Docstring, offset: int) -> tuple[DocstringSe
     return DocstringSectionRaises(raises), index
 
 
-def _read_warns_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionWarns | None, int]:
+def _read_warns_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionWarns | None, int]:
     # warns
     # WARNING
     #     TEXT?
@@ -398,7 +430,11 @@ def _read_warns_section(docstring: Docstring, offset: int) -> tuple[DocstringSec
     return DocstringSectionWarns(warns), index
 
 
-def _read_attributes_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionAttributes | None, int]:
+def _read_attributes_section(
+    docstring: Docstring,
+    offset: int,
+    **options: Any,
+) -> tuple[DocstringSectionAttributes | None, int]:
     # attributes (for classes)
     # NAME( : TYPE)?
     #    TEXT?
@@ -423,7 +459,10 @@ def _read_attributes_section(docstring: Docstring, offset: int) -> tuple[Docstri
 
 
 def _read_examples_section(  # noqa: WPS231
-    docstring: Docstring, offset: int
+    docstring: Docstring,
+    offset: int,
+    trim_doctest_flags: bool = True,
+    **options: Any,
 ) -> tuple[DocstringSectionExamples | None, int]:
     text, index = _read_block(docstring, offset)
 
@@ -444,6 +483,9 @@ def _read_examples_section(  # noqa: WPS231
                 current_text.append(line)
 
         elif in_code_example:
+            if trim_doctest_flags:
+                line = _RE_DOCTEST_FLAGS.sub("", line)
+                line = _RE_DOCTEST_BLANKLINE.sub("", line)
             current_example.append(line)
 
         elif line.startswith("```"):
@@ -458,6 +500,9 @@ def _read_examples_section(  # noqa: WPS231
                 sub_sections.append((DocstringSectionKind.text, "\n".join(current_text).rstrip("\n")))
                 current_text = []
             in_code_example = True
+
+            if trim_doctest_flags:
+                line = _RE_DOCTEST_FLAGS.sub("", line)
             current_example.append(line)
 
         else:
@@ -491,6 +536,7 @@ _section_reader = {
 
 def parse(  # noqa: WPS231
     docstring: Docstring,
+    trim_doctest_flags: bool = True,
     **options: Any,
 ) -> list[DocstringSection]:
     """Parse a docstring.
@@ -500,6 +546,7 @@ def parse(  # noqa: WPS231
 
     Parameters:
         docstring: The docstring to parse.
+        trim_doctest_flags: Whether to remove doctest flags from Python example blocks.
         **options: Additional parsing options.
 
     Returns:
@@ -509,6 +556,11 @@ def parse(  # noqa: WPS231
     current_section = []
 
     in_code_block = False
+
+    options = {
+        "trim_doctest_flags": trim_doctest_flags,
+        **options,
+    }
 
     lines = docstring.lines
     index = 0
@@ -527,7 +579,7 @@ def parse(  # noqa: WPS231
                     sections.append(DocstringSectionText("\n".join(current_section).rstrip("\n")))
                 current_section = []
             reader = _section_reader[_section_kind[line_lower]]
-            section, index = reader(docstring, index + 2)
+            section, index = reader(docstring, index + 2, **options)  # type: ignore[operator]
             if section:
                 sections.append(section)
 
