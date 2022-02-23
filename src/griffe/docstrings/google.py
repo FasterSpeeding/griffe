@@ -4,17 +4,28 @@ from __future__ import annotations
 
 import re
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any, List, Pattern, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 from griffe.docstrings.dataclasses import (
-    DocstringAdmonition,
     DocstringAttribute,
     DocstringParameter,
     DocstringRaise,
     DocstringReceive,
     DocstringReturn,
     DocstringSection,
+    DocstringSectionAdmonition,
+    DocstringSectionAttributes,
+    DocstringSectionDeprecated,
+    DocstringSectionExamples,
     DocstringSectionKind,
+    DocstringSectionOtherParameters,
+    DocstringSectionParameters,
+    DocstringSectionRaises,
+    DocstringSectionReceives,
+    DocstringSectionReturns,
+    DocstringSectionText,
+    DocstringSectionWarns,
+    DocstringSectionYields,
     DocstringWarn,
     DocstringYield,
 )
@@ -22,6 +33,8 @@ from griffe.docstrings.utils import parse_annotation, warning
 from griffe.expressions import Expression, Name
 
 if TYPE_CHECKING:
+    from typing import Any, Literal, Pattern  # type: ignore[attr-defined]
+
     from griffe.dataclasses import Docstring
 
 _warn = warning(__name__)
@@ -191,27 +204,31 @@ def _read_parameters(docstring: Docstring, offset: int) -> tuple[list[DocstringP
     return parameters, new_offset
 
 
-def _read_parameters_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:
+def _read_parameters_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionParameters | None, int]:
     parameters, new_offset = _read_parameters(docstring, offset)
 
     if parameters:
-        return DocstringSection(DocstringSectionKind.parameters, parameters), new_offset
+        return DocstringSectionParameters(parameters), new_offset
 
     _warn(docstring, new_offset, f"Empty parameters section at line {offset}")
     return None, new_offset
 
 
-def _read_other_parameters_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:
+def _read_other_parameters_section(
+    docstring: Docstring, offset: int
+) -> tuple[DocstringSectionOtherParameters | None, int]:
     parameters, new_offset = _read_parameters(docstring, offset)
 
     if parameters:
-        return DocstringSection(DocstringSectionKind.other_parameters, parameters), new_offset
+        return DocstringSectionOtherParameters(parameters), new_offset
 
     _warn(docstring, new_offset, f"Empty other parameters section at line {offset}")
     return None, new_offset
 
 
-def _read_attributes_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:  # noqa: WPS231
+def _read_attributes_section(
+    docstring: Docstring, offset: int
+) -> tuple[DocstringSectionAttributes | None, int]:  # noqa: WPS231
     attributes = []
     block, new_offset = _read_block_items(docstring, offset)
 
@@ -240,13 +257,13 @@ def _read_attributes_section(docstring: Docstring, offset: int) -> tuple[Docstri
         attributes.append(DocstringAttribute(name=name, annotation=annotation, description=description))
 
     if attributes:
-        return DocstringSection(DocstringSectionKind.attributes, attributes), new_offset
+        return DocstringSectionAttributes(attributes), new_offset
 
     _warn(docstring, new_offset, f"Empty attributes section at line {offset}")
     return None, new_offset
 
 
-def _read_raises_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:
+def _read_raises_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionRaises | None, int]:
     exceptions = []
     block, new_offset = _read_block_items(docstring, offset)
 
@@ -263,13 +280,13 @@ def _read_raises_section(docstring: Docstring, offset: int) -> tuple[DocstringSe
             exceptions.append(DocstringRaise(annotation=annotation, description=description))
 
     if exceptions:
-        return DocstringSection(DocstringSectionKind.raises, exceptions), new_offset
+        return DocstringSectionRaises(exceptions), new_offset
 
     _warn(docstring, new_offset, f"Empty exceptions section at line {offset}")
     return None, new_offset
 
 
-def _read_warns_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:
+def _read_warns_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionWarns | None, int]:
     warns = []
     block, new_offset = _read_block_items(docstring, offset)
 
@@ -283,13 +300,15 @@ def _read_warns_section(docstring: Docstring, offset: int) -> tuple[DocstringSec
             warns.append(DocstringWarn(annotation=annotation, description=description))
 
     if warns:
-        return DocstringSection(DocstringSectionKind.warns, warns), new_offset
+        return DocstringSectionWarns(warns), new_offset
 
     _warn(docstring, new_offset, f"Empty warns section at line {offset}")
     return None, new_offset
 
 
-def _read_returns_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:  # noqa: WPS231
+def _read_returns_section(  # noqa: WPS231
+    docstring: Docstring, offset: int
+) -> tuple[DocstringSectionReturns | None, int]:
     returns = []
     block, new_offset = _read_block_items(docstring, offset)
 
@@ -320,13 +339,15 @@ def _read_returns_section(docstring: Docstring, offset: int) -> tuple[DocstringS
         returns.append(DocstringReturn(name=name or "", annotation=annotation, description=description))
 
     if returns:
-        return DocstringSection(DocstringSectionKind.returns, returns), new_offset
+        return DocstringSectionReturns(returns), new_offset
 
     _warn(docstring, new_offset, f"Empty returns section at line {offset}")
     return None, new_offset
 
 
-def _read_yields_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:  # noqa: WPS231
+def _read_yields_section(  # noqa: WPS231
+    docstring: Docstring, offset: int
+) -> tuple[DocstringSectionYields | None, int]:
     yields = []
     block, new_offset = _read_block_items(docstring, offset)
 
@@ -358,13 +379,15 @@ def _read_yields_section(docstring: Docstring, offset: int) -> tuple[DocstringSe
         yields.append(DocstringYield(name=name or "", annotation=annotation, description=description))
 
     if yields:
-        return DocstringSection(DocstringSectionKind.yields, yields), new_offset
+        return DocstringSectionYields(yields), new_offset
 
     _warn(docstring, new_offset, f"Empty yields section at line {offset}")
     return None, new_offset
 
 
-def _read_receives_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:  # noqa: WPS231
+def _read_receives_section(  # noqa: WPS231
+    docstring: Docstring, offset: int
+) -> tuple[DocstringSectionReceives | None, int]:
     receives = []
     block, new_offset = _read_block_items(docstring, offset)
 
@@ -396,16 +419,18 @@ def _read_receives_section(docstring: Docstring, offset: int) -> tuple[Docstring
         receives.append(DocstringReceive(name=name or "", annotation=annotation, description=description))
 
     if receives:
-        return DocstringSection(DocstringSectionKind.receives, receives), new_offset
+        return DocstringSectionReceives(receives), new_offset
 
     _warn(docstring, new_offset, f"Empty receives section at line {offset}")
     return None, new_offset
 
 
-def _read_examples_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:  # noqa: WPS231
+def _read_examples_section(  # noqa: WPS231
+    docstring: Docstring, offset: int
+) -> tuple[DocstringSectionExamples | None, int]:
     text, new_offset = _read_block(docstring, offset)
 
-    sub_sections = []
+    sub_sections: list[tuple[Literal[DocstringSectionKind.text] | Literal[DocstringSectionKind.examples], str]] = []
     in_code_example = False
     in_code_block = False
     current_text: list[str] = []
@@ -447,13 +472,13 @@ def _read_examples_section(docstring: Docstring, offset: int) -> tuple[Docstring
         sub_sections.append((DocstringSectionKind.examples, "\n".join(current_example)))
 
     if sub_sections:
-        return DocstringSection(DocstringSectionKind.examples, sub_sections), new_offset
+        return DocstringSectionExamples(sub_sections), new_offset
 
     _warn(docstring, new_offset, f"Empty examples section at line {offset}")
     return None, new_offset
 
 
-def _read_deprecated_section(docstring: Docstring, offset: int) -> tuple[DocstringSection | None, int]:
+def _read_deprecated_section(docstring: Docstring, offset: int) -> tuple[DocstringSectionDeprecated | None, int]:
     text, new_offset = _read_block(docstring, offset)
 
     # early exit if there is no text in the yield section
@@ -472,7 +497,7 @@ def _read_deprecated_section(docstring: Docstring, offset: int) -> tuple[Docstri
     description = text.lstrip()
 
     return (
-        DocstringSection(DocstringSectionKind.deprecated, (version, description)),
+        DocstringSectionDeprecated(version=version, text=description),
         new_offset,
     )
 
@@ -513,7 +538,7 @@ def parse(  # noqa: WPS231
     Returns:
         A list of docstring sections.
     """
-    sections = []
+    sections: list[DocstringSection] = []
     current_section = []
 
     in_code_block = False
@@ -555,12 +580,7 @@ def parse(  # noqa: WPS231
                 if admonition_type.lower() in _section_kind:
                     if current_section:
                         if any(current_section):
-                            sections.append(
-                                DocstringSection(
-                                    DocstringSectionKind.text,
-                                    "\n".join(current_section).rstrip("\n"),
-                                )
-                            )
+                            sections.append(DocstringSectionText("\n".join(current_section).rstrip("\n")))
                         current_section = []
                     reader = _section_reader[_section_kind[admonition_type.lower()]]
                     section, offset = reader(docstring, offset + 1)
@@ -574,13 +594,7 @@ def parse(  # noqa: WPS231
                         if title is None:
                             title = admonition_type
                         admonition_type = admonition_type.lower().replace(" ", "-")
-                        sections.append(
-                            DocstringSection(
-                                kind=DocstringSectionKind.admonition,
-                                value=DocstringAdmonition(kind=admonition_type, contents=contents),
-                                title=title,
-                            )
-                        )
+                        sections.append(DocstringSectionAdmonition(kind=admonition_type, text=contents, title=title))
                     else:
                         with suppress(IndexError):
                             current_section.append(lines[offset])
@@ -590,6 +604,6 @@ def parse(  # noqa: WPS231
         offset += 1
 
     if current_section:
-        sections.append(DocstringSection(DocstringSectionKind.text, "\n".join(current_section).rstrip("\n")))
+        sections.append(DocstringSectionText("\n".join(current_section).rstrip("\n")))
 
     return sections
