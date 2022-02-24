@@ -319,6 +319,42 @@ def test_examples_section():
     assert examples.value[3][1].startswith(">>> a = 0  # doctest: +SKIP")
 
 
+def test_examples_section_followed_by_named_section():
+    """Parse examples section."""
+    docstring = """
+        Examples
+        --------
+        Hello, hello.
+
+        >>> 42 * 1
+        42
+
+        ```python
+        >>> print("Hello again.")
+        ```
+
+        >>> a = 2  # doctest: +SKIP
+        >>> b = a + 3
+        >>> print(b)
+        5
+
+        Bye.
+
+        Parameters
+        ----------
+
+        Not in the section.
+    """
+
+    sections, _ = parse(docstring, trim_doctest_flags=False)
+    assert len(sections) == 2
+    examples = sections[0]
+    assert len(examples.value) == 5
+    assert examples.value[0] == (DocstringSectionKind.text, "Hello, hello.")
+    assert examples.value[1] == (DocstringSectionKind.examples, ">>> 42 * 1\n42")
+    assert examples.value[3][1].startswith(">>> a = 2  # doctest: +SKIP")
+
+
 # =============================================================================================
 # Annotations
 def test_prefer_docstring_type_over_annotation():

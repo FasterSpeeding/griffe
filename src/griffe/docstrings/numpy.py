@@ -168,8 +168,14 @@ def _read_block(docstring: Docstring, offset: int) -> tuple[str, int]:
     # skip first empty lines
     while _is_empty_line(lines[index]):
         index += 1
+    while index < len(lines):
+        is_empty = _is_empty_line(lines[index])
+        if is_empty and _is_dash_line(lines[index + 1]):
+            break
 
-    while index < len(lines) and not (_is_empty_line(lines[index]) and _is_dash_line(lines[index + 1])):
+        if is_empty and index < len(lines) + 1 and _is_dash_line(lines[index + 2]):
+            break
+
         block.append(lines[index])
         index += 1
 
